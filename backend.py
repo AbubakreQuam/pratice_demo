@@ -20,7 +20,7 @@ app.add_middleware(
 )
 
 # Setting up Database Connection Key
-database-connection_key = st.secrets['database_connection_secret']
+database_connection_key = st.secrets['database_connection_secret']
 os.environ['database_connection_secret'] = database_connection_key
 
 
