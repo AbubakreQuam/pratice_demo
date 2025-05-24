@@ -1,4 +1,5 @@
 # backend.py
+import streamlit as st
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, field_validator
