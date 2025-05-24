@@ -30,6 +30,7 @@ def fetch_goods():
     try:
         with st.spinner("Loading goods..."):
             resp = requests.get(f"{BACKEND_URL}/goods", params=params, timeout=5)
+            print(resp)
             resp.raise_for_status()
             st.session_state.goods = resp.json()
     except RequestException as e:
