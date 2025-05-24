@@ -1,107 +1,83 @@
-# backend.py
-from fastapi import FastAPI, HTTPException, Query
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, field_validator
+from flask import Flask, request, jsonify
+from flask_cors import CORS
 import mysql.connector
 from mysql.connector import Error
-from typing import List, Optional
-import uvicorn
 
-app = FastAPI()
-
-# CORS setup to allow Streamlit frontend
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+app = Flask(__name__)
+CORS(app)  # Allow all origins for simplicity
 
 # Database connection helper
 def get_db_connection():
     try:
         return mysql.connector.connect(
             host="localhost",
-            user="root",        
+            user="root",
             password="*****",
             database="goods_db"
         )
     except Error as e:
-        # Log the exception as needed
-        raise HTTPException(status_code=500, detail="Database connection failed.")
+        return None
 
-# Pydantic models
-class Good(BaseModel):
-    id: int
-    name: str
-    status: str
+# Routes
+@app.route("/goods", methods=["GET"])
+def get_goods():
+    search = request.args.get("search")
+    limit = request.args.get("limit", default=10, type=int)
+    offset = request.args.get("offset", default=0, type=int)
 
-class GoodUpdate(BaseModel):
-    id: int
-    status: str
+    db = get_db_connection()
+    if not db:
+        return jsonify({"error": "Database connection failed."}), 500
 
-    @field_validator('status')
-    def validate_status(cls, v):
-        allowed = {'locked', 'unlocked'}
-        if v.lower() not in allowed:
-            raise ValueError(f"Invalid status '{v}'. Allowed: {allowed}")
-        return v.lower()
-
-# GET /goods with optional search, pagination
-@app.get("/goods", response_model=List[Good])
-def get_goods(
-    search: Optional[str] = Query(None, description="Search goods by name."),
-    limit: int = Query(10, ge=1, description="Number of items to return."),
-    offset: int = Query(0, ge=0, description="Number of items to skip.")
-):
     try:
-        db = get_db_connection()
         cursor = db.cursor(dictionary=True)
-        base_query = "SELECT id, name, status FROM goods"
+        query = "SELECT id, name, status FROM goods"
         params = []
-        if search:
-            base_query += " WHERE name LIKE %s"
-            params.append(f"%{search}%")
-        base_query += " ORDER BY id LIMIT %s OFFSET %s"
-        params.extend([limit, offset])
-        cursor.execute(base_query, params)
-        goods = cursor.fetchall()
-    except Error:
-        raise HTTPException(status_code=500, detail="Failed to fetch goods.")
-    finally:
-        if 'cursor' in locals(): cursor.close()
-        if 'db' in locals(): db.close()
-    return goods
 
-# POST /lock to lock/unlock goods
-@app.post("/lock")
-def lock_good(update: GoodUpdate):
+        if search:
+            query += " WHERE name LIKE %s"
+            params.append(f"%{search}%")
+
+        query += " ORDER BY id LIMIT %s OFFSET %s"
+        params.extend([limit, offset])
+
+        cursor.execute(query, params)
+        goods = cursor.fetchall()
+        return jsonify(goods)
+    except Error:
+        return jsonify({"error": "Failed to fetch goods."}), 500
+    finally:
+        cursor.close()
+        db.close()
+
+@app.route("/lock", methods=["POST"])
+def lock_good():
+    data = request.get_json()
+    good_id = data.get("id")
+    status = data.get("status", "").lower()
+
+    if status not in {"locked", "unlocked"}:
+        return jsonify({"error": "Invalid status. Use 'locked' or 'unlocked'."}), 400
+
+    db = get_db_connection()
+    if not db:
+        return jsonify({"error": "Database connection failed."}), 500
+
     try:
-        db = get_db_connection()
         cursor = db.cursor()
         cursor.execute(
             "UPDATE goods SET status = %s WHERE id = %s",
-            (update.status, update.id)
+            (status, good_id)
         )
         if cursor.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Good not found.")
+            return jsonify({"error": "Good not found."}), 404
         db.commit()
-    except HTTPException:
-        raise
+        return jsonify({"message": f"Good {good_id} status set to {status}."})
     except Error:
-        raise HTTPException(status_code=500, detail="Failed to update status.")
+        return jsonify({"error": "Failed to update status."}), 500
     finally:
-        if 'cursor' in locals(): cursor.close()
-        if 'db' in locals(): db.close()
-    return {"message": f"Good {update.id} status set to {update.status}."}
-# Error handling
+        cursor.close()
+        db.close()
 
 if __name__ == "__main__":
-    uvicorn.run(
-        "backend:app",  # import string for reload support
-        host="0.0.0.0",
-        port=8000,
-        reload=True
-    )
-# This code is a FastAPI backend that connects to a MySQL database to manage goods.
+    app.run(debug=True, host="0.0.0.0", port=8000)
