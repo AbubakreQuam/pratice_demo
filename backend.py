@@ -1,17 +1,29 @@
-from flask import Flask, request, jsonify
-from flask_cors import CORS
+# backend.py
+from fastapi import FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, field_validator
 import mysql.connector
 from mysql.connector import Error
+from typing import List, Optional
+import uvicorn
 
-app = Flask(__name__)
-CORS(app)  # Allow all origins for simplicity
+app = FastAPI()
+
+# CORS setup to allow Streamlit frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Database connection helper
 def get_db_connection():
     try:
         return mysql.connector.connect(
             host="localhost",
-            user="root",
+            user="root",        
             password="*****",
             database="goods_db"
         )
@@ -80,4 +92,10 @@ def lock_good():
         db.close()
 
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=8000)
+    uvicorn.run(
+        "backend:app",  # import string for reload support
+        host="0.0.0.0",
+        port=8000,
+        reload=True
+    )
+# This code is a FastAPI backend that connects to a MySQL database to manage goods.
