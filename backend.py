@@ -6,6 +6,7 @@ import mysql.connector
 from mysql.connector import Error
 from typing import List, Optional
 import uvicorn
+import os
 
 app = FastAPI()
 
@@ -18,13 +19,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Setting up Database Connection Key
+database-connection_key = st.secrets['database_connection_secret']
+os.environ['database_connection_secret'] = database_connection_key
+
+
 # Database connection helper
 def get_db_connection():
     try:
         return mysql.connector.connect(
             host="localhost",
             user="root",        
-            password="*****",
+            password=database_connection_key,
             database="goods_db"
         )
     except Error as e:
